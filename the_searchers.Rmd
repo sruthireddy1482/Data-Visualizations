@@ -1,0 +1,238 @@
+---
+title: "Analysis of USA Mass Shootings"
+author: "The Searchers"
+date: "3/16/2021"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE, message= FALSE,
+                      out.width = "25%" , fig.width = 8)
+```
+
+```{r,include=FALSE}
+library(ggplot2)
+library(tidyr)
+library(tidyverse)
+library(forcats)
+library(car)
+library(dplyr)
+library(WVPlots)
+library(plotly)
+```
+
+```{r,include=FALSE}
+data= read.csv("Mass Shootings Dataset.csv")
+summary(data)
+str(data)
+dim(data)
+#converting class of date from char to date
+data$Date=as.Date(data$Date,format="%m/%d/%Y")
+str(data$Date)
+#seperating Location based on state
+df=separate(data,col=Location , into= c("Place","State"),sep=",")
+df
+head(df)
+View(df)
+#viewing the incidents in each state
+table(df$State)
+#replacing values M,M/F into MALE,MALE/FEMALE
+table(df$Gender)
+df$Gender[df$Gender=="M"]<-"Male"
+df$Gender[df$Gender=="M/F"]<-"Male/Female"
+table(df$Gender)
+#rearranging race values accordingly
+unique(df$Race)
+#install.packages("car")
+df$Race<-recode(df$Race,"c('Black American or African American','Black American or African American/Unknown','black')='Black'")
+df$Race<-recode(df$Race,"c('White American or European American','White American or European American/Some other Race','white')='White'")
+df$Race<-recode(df$Race,"c('Asian American/Some other race','Asian')='Asian American'")
+df$Race<-recode(df$Race,"c('Some other race','Unknown','Two or more races')='Other'")
+#converting empty values in  race column to NA
+df$Race[df$Race==""] = NA
+#converting "unknown" to "Unknown"
+unique(df$Mental.Health.Issues)
+df$Mental.Health.Issues[df$Mental.Health.Issues=="unknown"]<-"Unknown"
+#converting empty values in  cause column to NA
+df$Cause[df$Cause==""] = NA
+#concerting empty values in entire dataframe to NA
+df[df==""]=NA
+
+#converting "Open+CLose" to "Open+Close"
+df$Open.Close.Location[df$Open.Close.Location=="Open+CLose"]<-"Open+Close"
+
+#converting age variable from character to numeric
+df$Age=as.numeric(df$Age)
+```
+
+The dataset consists of 323 observations and 21 variables, which describe the mass shooting incidents occurred between the years 1966 and 2017 in the United States of America. The description of prominent variables involved in the analysis are as follows.
+
+1.	Title – Title refers to the name of the incident.
+2.	Location – Location in the city or town where the incident was reported.
+3.	State – State of the location 
+4.	Date – The incident date
+5.	Incident Area- Site of the Incident.
+6.	Open Close Location – Whether the shoot occurred indoors or outdoors.
+7.	Target – Who the victims of the shoot were.
+8.	Cause – The reason due to which the offender carried out the shoot.
+9.	Fatalities – Number of deaths occurred.
+10.	Injured - number of victims injured.
+11.	Total Victims – count of affected people during the shoots.
+12.	Age – Age of the perpetrator.
+13.	Mental Health issues – Describes the mental condition of the shooter.
+14.	Race – Race of the shooter.
+15.	Gender – Gender of the Shooter.
+
+```{r}
+ggplot(df, aes(Gender, Age))+geom_violin(trim=F)+
+  geom_jitter(color="#C5908E")+
+  scale_y_continuous(breaks=seq(0,80,10))+
+  ggtitle("Analysis of Gender and Age of shooter")+
+  theme_minimal()
+```
+
+The violin graph indicates the relation between age and gender of the shooter. Age is represented on the Y- axis and Gender is plotted on the X- axis. Looking at the spread of the data, we can observe that majority of the shooters are male. There are some incidents where the gender and age of the offender are not known. Most of the male shooters are teenagers or people in their twenties and middle-aged people above 35 years. On the other hand, female shooters who are fewer in number are above thirty years of age.
+
+```{r,include=FALSE}
+tab=table(df$Open.Close.Location)
+tab
+lbls <- paste(names(tab), "\n", tab, sep="")
+color=c("#9FE2BF","#6495ED","#CCCCFF")
+```
+
+```{r}
+pie(tab, col=color, labels = lbls,main="Incident Location")
+```
+
+The above pie chart illustrates the count of incidents occurred in open, close and both the locations. 197 out of the total incidents occurred in closed places. On the contrary, 78 shootings took place in open locations, while 20 incidents were carried out both in open and closed locations.
+
+```{r}
+pp_location=df%>%
+  filter(!is.na(Open.Close.Location))
+PairPlot(pp_location, 
+         colnames(df)[11:13], 
+         "Subjects affected according to Location", 
+         group_var = "Open.Close.Location")
+```
+
+The graph shows the total number of people affected during the incidents. Out of the total victims, few people were deceased and most of the people survived with injuries. From the graph, it is evident that high number of incidents occurred in closed locations, which caused more causalities and injuries indoors. 
+The incident which is appearing on the right corner of the graphs occurred in an open location in Las Vegas and it caused nearly 60 deaths and around 550 victims. It is considered as one of the deadliest mass shootings in the USA.
+
+```{r}
+ggplot(df, aes(x=Date, y=Total.victims ,color=Injured)) + 
+  geom_line() + 
+  xlab("") + 
+  ylab("Number of Victims") + 
+  theme_minimal() + 
+  scale_x_date(breaks=scales::pretty_breaks(n=10)) + 
+  labs(title = "Number of Victims per Year")
+```
+
+The above line chart indicates the number of victims who were injured over the period of the shoots. The distribution did not follow any trend from 1965 to 2015. However, the number of victims who were injured has drastically increased throughout the years from 2015 to 2017.
+
+```{r}
+all_states <- map_data("state")
+#plot all states with ggplot
+p <- ggplot()
+p <- p + 
+geom_polygon(data=all_states, aes(x=long, y=lat, group = group,fill=df$Fatalities),colour="black", fill="white")
+ 
+p <- 
+p + geom_point(data=df[df$Longitude >=-140,]
+                 , aes(x=Longitude, y=Latitude
+                       ,size = `Total.victims`
+                        ,color = Fatalities)
+                  ,alpha = 0.6) + 
+   scale_color_gradient(low = "pink", high = "blue") + 
+   ggtitle("Total victims & Fatalities on US map")
+p
+```
+
+ The map describes the number of fatalities in each incident that has occurred over the states of the USA. It can be seen that in large number of incidents, the fatalities were less than 20 , however the number of incidents where the deaths are between 20 and 40 cannot be disregarded. There are not many incidents where the count of casualties increased beyond 40.
+
+```{r}
+
+health_plot=ggplot(mutate(df, Mental.Health.Issues = fct_infreq(Mental.Health.Issues))) + 
+  geom_bar(aes(x = Mental.Health.Issues),fill="#F9966B")+
+  labs(x = 'Mental Health Issues', y = 'count', title = 'Mental Health of Shooters')
+#interactive plot
+ggplotly(health_plot)
+```
+
+ The bar plot demonstrates the mental health condition of the shooters. Out of the 323 incidents, the health condition of 111 offenders is not known. While 106 shooters were suffering due to different mental disorders, in 13 cases, it is not clear if there were mental illness reasons to commit the crime. 93 people who carried out the shoots were not identified with any mental ailments.
+ As there are increasing reports of shoot incidents in the US due to mental illness, it is proposed that monitoring people with mental illness could help in predicting the violence as well as control them and mental illness should not be blamed for committing crimes.
+
+```{r}
+states_plot=function(df){
+  df %>%
+  filter(!is.na(State)) %>%
+  group_by(State) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count)) %>%
+  mutate(State = reorder(State,Count)) %>%
+  dplyr::filter(Count >= 5)%>%
+    
+  ggplot(aes(x=State,y=Count)) +
+  geom_bar(stat='identity',colour="white",fill="#98FF98") +
+  geom_text(aes(x = State, y = 1, label = paste0("(",Count,")",sep="")),
+              hjust=0, vjust=.5, size = 4, colour = 'black') +
+  labs(x = 'State', y = 'Number of Shootings', title = 'Shootings per State') +
+  coord_flip()
+}
+states_plot(df)
+```
+
+ As opposed to other western countries, the United States has a considerably higher rate of shootings, which some speculate is due to the country's gun control laws which are dependent on the respective state. There are more gun incidents in the states with less gun restrictions.
+ As of 2017, California had the highest number of mass shootings in America, with 28 shootings from the year 1966. Florida occupied the second position with 20 shoots. Texas, Washington, Georgia and North Carolina are succeeded by Florida.
+
+```{r}
+df%>%
+  filter(!is.na(Race))%>%
+  filter(!is.na(Age))%>%
+  ggplot(aes(x=Race,y=Age,fill=Race))+geom_boxplot()+
+  scale_y_continuous(name="Age of the shooter",breaks=seq(0,100,10))+
+  ggtitle("Race and age of the Shooters")+
+  coord_flip()
+```
+ 
+ The above box plot represents the age of the shooter on x axis and race on the y axis. Whites and other race people have executed more shoots when compared to blacks, Latinos and Asians. Most of the white shooters belonged to age group 20-45 while the blacks belonged to the group 25-40. The native Americans also belonged to the age group of around 25 and 40. Among the shooters of all races , major proportion of them were below 45 years of age. Only few shooters above 45 years of age are known.
+ 
+```{r}
+df%>%
+  filter(!is.na(Cause))%>%
+  filter(!is.na(Open.Close.Location))%>%
+  ggplot(aes(x=Cause))+
+  geom_bar(aes(fill=Open.Close.Location),position="stack")+
+  coord_flip()+facet_wrap(~Gender)+
+  ggtitle("Cause and location of the Incident")
+```
+
+From the previous graphs, it is apparent that major proportion of the incidents occurred in closed locations and males are the main perpetrators. There are many causes for the shooters to execute shoots , out of which terrorism, psycho and anger are significant. The fractions of unemployment, domestic disputes, frustration and revenge cannot be ignored as well.The most common form of terror attack in the United States is bombing/explosion. In 2017, most of the people died due to terrorism attacks.
+
+```{r,include=FALSE}
+d=df%>%
+  filter(!is.na(Race))
+```
+
+```{r}
+ggplot(d, aes(x=Race, y=Gender)) + 
+  geom_jitter(aes(color=Race))+
+  coord_flip()+
+  ggtitle("Race and Gender of the Offenders")
+```
+
+The above scatter plot shows race of the shooter on x axis and gender on the y axis. It can be inferred that males who belong to white race carried out more shoots than blacks, Latinos and Asians. Likewise, white females committed most of the crimes of all the other race females.
+
+```{r}
+df%>%
+  filter(!is.na(Open.Close.Location))%>%
+  ggplot() + 
+  geom_point(mapping = aes(x = Date , y = Fatalities ,color=Open.Close.Location))+
+  scale_x_date(breaks =scales::pretty_breaks(n=10))+
+  ggtitle("Fatalities according to Location")
+```
+
+The above scatter plot implies that majority of the casualties occurred due to the mass shootings are in the closed locations, where there is minimum chance to realize and escape the attacks. However, some incidents occurred where the shooter implemented the shoot both  indoors and outdoors.
+
